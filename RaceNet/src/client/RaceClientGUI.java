@@ -5,21 +5,28 @@ import shared.Protocol;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JFrame;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
+import javax.swing.KeyStroke;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import java.awt.BorderLayout;
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.LayoutManager;
+import java.awt.RenderingHints;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -35,6 +42,7 @@ public class RaceClientGUI extends JFrame {
     private final JButton startButton = new JButton("Iniciar Corrida");
     private final JButton accelerateButton = new JButton("ACELERAR");
     private final JProgressBar myProgress = new JProgressBar(0, 100);
+    private final RaceTrackPanel raceTrackPanel = new RaceTrackPanel();
     private final JPanel opponentsPanel = new JPanel(new GridLayout(0, 1, 4, 4));
     private final JTextArea statusArea = new JTextArea(8, 40);
     private final JLabel connectionStatusLabel = new JLabel("Desconectado");
@@ -133,8 +141,8 @@ public class RaceClientGUI extends JFrame {
 
         JPanel centerPanel = new JPanel(new BorderLayout(8, 8));
         centerPanel.setOpaque(false);
-        centerPanel.add(racePanel, BorderLayout.NORTH);
-        centerPanel.add(new JLabel("Adversários:"), BorderLayout.CENTER);
+        centerPanel.add(raceTrackPanel, BorderLayout.NORTH);
+        centerPanel.add(racePanel, BorderLayout.CENTER);
         centerPanel.add(opponentsPanel, BorderLayout.SOUTH);
 
         statusArea.setEditable(false);
@@ -165,6 +173,13 @@ public class RaceClientGUI extends JFrame {
         readyButton.addActionListener(event -> sendTcp(Protocol.READY + ";" + playerName()));
         startButton.addActionListener(event -> sendTcp(Protocol.START_RACE));
         accelerateButton.addActionListener(event -> accelerate());
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("SPACE"), "accelerate");
+        getRootPane().getActionMap().put("accelerate", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent event) {
+                accelerate();
+            }
+        });
     }
 
     private void connect() {
@@ -217,6 +232,7 @@ public class RaceClientGUI extends JFrame {
                     raceStarted = true;
                     accelerateButton.setEnabled(true);
                     startButton.setEnabled(false);
+                    updateMyProgress();
                     log("Corrida iniciada.");
                 }
                 case Protocol.WINNER -> {
@@ -260,6 +276,7 @@ public class RaceClientGUI extends JFrame {
     private void updateMyProgress() {
         myProgress.setValue(myPosition);
         myProgress.setString(playerName() + " - " + myPosition + "%");
+        raceTrackPanel.updatePosition(playerName(), myPosition, true);
     }
 
     private void updateOpponent(String name, int position) {
@@ -277,6 +294,7 @@ public class RaceClientGUI extends JFrame {
         bar.setValue(position);
         bar.setString(name + " - " + position + "%");
         opponentsPanel.repaint();
+        raceTrackPanel.updatePosition(name, position, false);
     }
 
     private void sendTcp(String message) {
@@ -329,6 +347,129 @@ public class RaceClientGUI extends JFrame {
         button.setFocusPainted(false);
         button.setFont(new Font("Segoe UI", Font.BOLD, 12));
         button.setBorder(BorderFactory.createEmptyBorder(8, 14, 8, 14));
+    }
+
+    private static class RaceTrackPanel extends JPanel {
+        private final Map<String, Integer> positions = new LinkedHashMap<>();
+        private String mainPlayerName = "";
+
+        RaceTrackPanel() {
+            setPreferredSize(new Dimension(560, 220));
+            setMinimumSize(new Dimension(560, 180));
+            setBackground(new Color(30, 41, 59));
+            setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        }
+
+        void updatePosition(String name, int position, boolean mainPlayer) {
+            if (mainPlayer) {
+                mainPlayerName = name;
+            }
+            positions.put(name, Math.max(0, Math.min(100, position)));
+            repaint();
+        }
+
+        @Override
+        protected void paintComponent(Graphics graphics) {
+            super.paintComponent(graphics);
+            Graphics2D graphics2D = (Graphics2D) graphics.create();
+            graphics2D.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            int width = getWidth();
+            int left = 90;
+            int right = width - 45;
+            int trackWidth = right - left;
+            int laneHeight = 52;
+            int startY = 44;
+
+            drawTrackTitle(graphics2D, width);
+            drawFinishLine(graphics2D, right, startY, laneHeight);
+
+            if (positions.isEmpty()) {
+                graphics2D.setColor(new Color(203, 213, 225));
+                graphics2D.drawString("Conecte e inicie a corrida para ver os carrinhos.", 95, 120);
+                graphics2D.dispose();
+                return;
+            }
+
+            int laneIndex = 0;
+            for (Map.Entry<String, Integer> entry : positions.entrySet()) {
+                int y = startY + laneIndex * laneHeight;
+                drawLane(graphics2D, left, right, y, laneHeight);
+                drawPlayerName(graphics2D, entry.getKey(), y);
+                drawCar(graphics2D, entry.getKey(), entry.getValue(), left, trackWidth, y);
+                laneIndex++;
+            }
+
+            graphics2D.dispose();
+        }
+
+        private void drawTrackTitle(Graphics2D graphics2D, int width) {
+            graphics2D.setColor(new Color(226, 232, 240));
+            graphics2D.setFont(new Font("Segoe UI", Font.BOLD, 17));
+            graphics2D.drawString("Pista RaceNet", 14, 24);
+
+            graphics2D.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+            graphics2D.setColor(new Color(148, 163, 184));
+            graphics2D.drawString("Clique em ACELERAR para movimentar seu carrinho", width - 310, 24);
+        }
+
+        private void drawLane(Graphics2D graphics2D, int left, int right, int y, int laneHeight) {
+            graphics2D.setColor(new Color(51, 65, 85));
+            graphics2D.fillRoundRect(left, y, right - left, laneHeight - 10, 18, 18);
+
+            graphics2D.setColor(new Color(148, 163, 184));
+            graphics2D.setStroke(new BasicStroke(2));
+            int middleY = y + (laneHeight - 10) / 2;
+            for (int x = left + 12; x < right - 20; x += 34) {
+                graphics2D.drawLine(x, middleY, x + 16, middleY);
+            }
+        }
+
+        private void drawFinishLine(Graphics2D graphics2D, int right, int startY, int laneHeight) {
+            int finishHeight = 3 * laneHeight;
+            graphics2D.setColor(new Color(248, 250, 252));
+            graphics2D.fillRect(right - 8, startY - 4, 8, finishHeight);
+
+            graphics2D.setColor(new Color(15, 23, 42));
+            for (int y = startY - 4; y < startY - 4 + finishHeight; y += 12) {
+                graphics2D.fillRect(right - 8, y, 4, 6);
+                graphics2D.fillRect(right - 4, y + 6, 4, 6);
+            }
+        }
+
+        private void drawPlayerName(Graphics2D graphics2D, String name, int y) {
+            graphics2D.setFont(new Font("Segoe UI", Font.BOLD, 12));
+            graphics2D.setColor(name.equals(mainPlayerName) ? new Color(125, 211, 252) : new Color(226, 232, 240));
+            graphics2D.drawString(name, 14, y + 25);
+        }
+
+        private void drawCar(Graphics2D graphics2D, String name, int position, int left, int trackWidth, int y) {
+            int carWidth = 42;
+            int carHeight = 22;
+            int carX = left + Math.round((trackWidth - carWidth - 10) * (position / 100f));
+            int carY = y + 9;
+            Color carColor = name.equals(mainPlayerName) ? new Color(249, 115, 22) : new Color(59, 130, 246);
+
+            graphics2D.setColor(new Color(15, 23, 42, 100));
+            graphics2D.fillOval(carX + 3, carY + 17, carWidth - 6, 9);
+
+            graphics2D.setColor(carColor);
+            graphics2D.fillRoundRect(carX, carY + 6, carWidth, carHeight - 6, 12, 12);
+            graphics2D.fillRoundRect(carX + 9, carY, 22, 14, 10, 10);
+
+            graphics2D.setColor(new Color(224, 242, 254));
+            graphics2D.fillRoundRect(carX + 16, carY + 3, 12, 8, 6, 6);
+
+            graphics2D.setColor(new Color(15, 23, 42));
+            graphics2D.fillOval(carX + 7, carY + 19, 9, 9);
+            graphics2D.fillOval(carX + 27, carY + 19, 9, 9);
+
+            graphics2D.setColor(new Color(226, 232, 240));
+            graphics2D.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            String label = position + "%";
+            FontMetrics metrics = graphics2D.getFontMetrics();
+            graphics2D.drawString(label, carX + (carWidth - metrics.stringWidth(label)) / 2, carY - 4);
+        }
     }
 
     public static void main(String[] args) {
