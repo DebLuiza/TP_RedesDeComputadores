@@ -42,14 +42,14 @@ public class ClientHandler implements Runnable {
                 handle(message);
             }
         } catch (IOException exception) {
-            System.err.println("Cliente TCP desconectado: " + exception.getMessage());
+            System.err.println("[LOG] Cliente TCP desconectado (" + playerName + "): " + exception.getMessage());
         } finally {
             tcpServer.removeClient(this);
         }
     }
 
     private void handle(String message) {
-        System.out.println("[TCP recebido] " + message);
+        System.out.println("[LOG] TCP recebido de " + playerName + ": " + message);
         String[] parts = Protocol.split(message);
         if (parts.length == 0) {
             return;
@@ -60,6 +60,7 @@ public class ClientHandler implements Runnable {
             case Protocol.READY -> handleReady(parts);
             case Protocol.START_RACE -> raceServer.startRace();
             case Protocol.FINISH -> handleFinish(parts);
+            case Protocol.RESET -> raceServer.resetRace();
             default -> send(Protocol.STATUS + ";Comando TCP desconhecido: " + message);
         }
     }
@@ -72,12 +73,14 @@ public class ClientHandler implements Runnable {
         playerName = parts[1].trim();
         state.addPlayer(playerName);
         send(Protocol.ENTER_OK + ";" + playerName);
+        System.out.println("[EVENTO] Jogador " + playerName + " entrou.");
         tcpServer.broadcast(Protocol.STATUS + ";" + playerName + " entrou no jogo.");
     }
 
     private void handleReady(String[] parts) {
         String name = parts.length >= 2 ? parts[1].trim() : playerName;
         state.markReady(name);
+        System.out.println("[EVENTO] Jogador " + name + " está pronto.");
         tcpServer.broadcast(Protocol.STATUS + ";" + name + " está pronto.");
     }
 

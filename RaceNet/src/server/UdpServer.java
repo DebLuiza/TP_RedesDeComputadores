@@ -39,12 +39,12 @@ public class UdpServer implements Runnable {
                 handle(message, packet);
             }
         } catch (IOException exception) {
-            System.err.println("Erro no servidor UDP: " + exception.getMessage());
+            System.err.println("[ERRO] Falha no servidor UDP: " + exception.getMessage());
         }
     }
 
     private void handle(String message, DatagramPacket packet) {
-        System.out.println("[UDP recebido] " + message);
+        System.out.println("[LOG] UDP recebido: " + message + " de " + packet.getSocketAddress());
         String[] parts = Protocol.split(message);
         if (parts.length < 3 || !Protocol.POSITION.equals(parts[0])) {
             return;
@@ -58,6 +58,7 @@ public class UdpServer implements Runnable {
             int officialPosition = state.updatePosition(name, position);
             broadcastRanking();
             if (officialPosition >= 100) {
+                System.out.println("[EVENTO] Jogador " + name + " atingiu 100%");
                 raceServer.confirmWinner(name);
             }
         } catch (NumberFormatException exception) {
@@ -65,12 +66,17 @@ public class UdpServer implements Runnable {
         }
     }
 
+    public void clearClients() {
+        udpClients.clear();
+        System.out.println("[EVENTO] Lista de clientes UDP limpa.");
+    }
+
     public void broadcastRanking() {
         String message = state.rankingMessage();
         for (InetSocketAddress address : udpClients.values()) {
             send(message, address);
         }
-        System.out.println("[UDP] " + message);
+        System.out.println("[LOG] Broadcast UDP: " + message);
     }
 
     private void send(String message, java.net.SocketAddress address) {
@@ -83,7 +89,7 @@ public class UdpServer implements Runnable {
         try {
             socket.send(packet);
         } catch (IOException exception) {
-            System.err.println("Erro ao enviar UDP: " + exception.getMessage());
+            System.err.println("[ERRO] Falha ao enviar UDP para " + address + ": " + exception.getMessage());
         }
     }
 }

@@ -76,4 +76,15 @@ public class RaceState {
         }
         return builder.toString();
     }
+
+    public synchronized boolean allPlayersReady() {
+        return !positions.isEmpty() && readyPlayers.size() == positions.size();
+    }
+
+    public synchronized void reset() {
+        positions.clear();
+        readyPlayers.clear();
+        raceStarted = false;
+        winner = null;
+    }
 }

@@ -31,7 +31,7 @@ public class TcpServer implements Runnable {
     }
 
     public void broadcast(String message) {
-        System.out.println("[TCP] " + message);
+        System.out.println("[LOG] Broadcast TCP: " + message);
         for (ClientHandler client : clients) {
             client.send(message);
         }
@@ -42,12 +42,13 @@ public class TcpServer implements Runnable {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             while (true) {
                 Socket socket = serverSocket.accept();
+                System.out.println("[EVENTO] Novo cliente conectado: " + socket.getRemoteSocketAddress());
                 ClientHandler handler = new ClientHandler(socket, state, this, raceServer);
                 addClient(handler);
                 new Thread(handler, "Client-" + socket.getRemoteSocketAddress()).start();
             }
         } catch (IOException exception) {
-            System.err.println("Erro no servidor TCP: " + exception.getMessage());
+            System.err.println("[ERRO] Falha no servidor TCP: " + exception.getMessage());
         }
     }
 }
