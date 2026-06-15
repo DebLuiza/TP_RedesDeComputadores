@@ -40,12 +40,15 @@ public class RaceClientGUI extends JFrame {
     private final JButton connectButton = new JButton("Conectar");
     private final JButton readyButton = new JButton("Estou Pronto");
     private final JButton startButton = new JButton("Iniciar Corrida");
+    private final JButton resetButton = new JButton("Nova Corrida");
     private final JButton accelerateButton = new JButton("ACELERAR");
     private final JProgressBar myProgress = new JProgressBar(0, 100);
     private final RaceTrackPanel raceTrackPanel = new RaceTrackPanel();
     private final JPanel opponentsPanel = new JPanel(new GridLayout(0, 1, 4, 4));
     private final JTextArea statusArea = new JTextArea(8, 40);
     private final JLabel connectionStatusLabel = new JLabel("Desconectado");
+    private final JLabel timerLabel = new JLabel("Tempo: 0.0s");
+    private final javax.swing.Timer raceTimer;
     private final TcpClient tcpClient = new TcpClient();
     private final UdpClient udpClient = new UdpClient();
     private final Map<String, JProgressBar> opponentBars = new LinkedHashMap<>();
@@ -53,9 +56,11 @@ public class RaceClientGUI extends JFrame {
     private boolean connected;
     private boolean raceStarted;
     private int myPosition;
+    private long startTime;
 
     public RaceClientGUI() {
         super("RaceNet - Corrida Multiplayer");
+        raceTimer = new javax.swing.Timer(100, e -> updateTimerLabel());
         buildLayout();
         bindActions();
         setButtons(false);
@@ -111,10 +116,12 @@ public class RaceClientGUI extends JFrame {
         buttonsPanel.add(connectButton);
         buttonsPanel.add(readyButton);
         buttonsPanel.add(startButton);
+        buttonsPanel.add(resetButton);
 
         styleButton(connectButton, primary);
         styleButton(readyButton, new Color(91, 95, 110));
         styleButton(startButton, success);
+        styleButton(resetButton, new Color(130, 136, 148));
         styleButton(accelerateButton, new Color(255, 111, 0));
 
         JPanel topPanel = new JPanel(new BorderLayout(8, 8));
@@ -132,9 +139,17 @@ public class RaceClientGUI extends JFrame {
         myProgress.setBackground(new Color(226, 232, 240));
         myProgress.setFont(new Font("Segoe UI", Font.BOLD, 13));
 
+        timerLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        timerLabel.setForeground(primary);
+
+        JPanel raceHeaderPanel = new JPanel(new BorderLayout());
+        raceHeaderPanel.setOpaque(false);
+        raceHeaderPanel.add(new JLabel("Minha corrida:"), BorderLayout.WEST);
+        raceHeaderPanel.add(timerLabel, BorderLayout.EAST);
+
         JPanel racePanel = new JPanel(new BorderLayout(6, 6));
         racePanel.setOpaque(false);
-        racePanel.add(new JLabel("Minha corrida:"), BorderLayout.NORTH);
+        racePanel.add(raceHeaderPanel, BorderLayout.NORTH);
         racePanel.add(myProgress, BorderLayout.CENTER);
 
         opponentsPanel.setOpaque(false);
@@ -172,6 +187,7 @@ public class RaceClientGUI extends JFrame {
         connectButton.addActionListener(event -> connect());
         readyButton.addActionListener(event -> sendTcp(Protocol.READY + ";" + playerName()));
         startButton.addActionListener(event -> sendTcp(Protocol.START_RACE));
+        resetButton.addActionListener(event -> sendTcp(Protocol.RESET));
         accelerateButton.addActionListener(event -> accelerate());
         getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("SPACE"), "accelerate");
         getRootPane().getActionMap().put("accelerate", new javax.swing.AbstractAction() {
@@ -213,8 +229,11 @@ public class RaceClientGUI extends JFrame {
         log(playerName() + " enviou posição " + myPosition + " via UDP.");
 
         if (myPosition >= 100) {
-            sendTcp(Protocol.FINISH + ";" + playerName() + ";tempo=0");
+            long duration = System.currentTimeMillis() - startTime;
+            double seconds = duration / 1000.0;
+            sendTcp(Protocol.FINISH + ";" + playerName() + ";tempo=" + String.format("%.1f", seconds));
             accelerateButton.setEnabled(false);
+            raceTimer.stop();
         }
     }
 
@@ -230,17 +249,38 @@ public class RaceClientGUI extends JFrame {
                 case Protocol.STATUS -> log(parts.length > 1 ? parts[1] : message);
                 case Protocol.START_RACE -> {
                     raceStarted = true;
+                    startTime = System.currentTimeMillis();
+                    raceTimer.start();
                     accelerateButton.setEnabled(true);
                     startButton.setEnabled(false);
+                    resetButton.setVisible(false);
                     updateMyProgress();
                     log("Corrida iniciada.");
                 }
                 case Protocol.WINNER -> {
                     raceStarted = false;
+                    raceTimer.stop();
                     accelerateButton.setEnabled(false);
+                    resetButton.setVisible(true);
                     String winner = parts.length > 1 ? parts[1] : "desconhecido";
                     log("Vencedor confirmado por TCP: " + winner);
                     JOptionPane.showMessageDialog(this, "Vencedor: " + winner);
+                }
+                case Protocol.RESET -> {
+                    raceStarted = false;
+                    raceTimer.stop();
+                    myPosition = 0;
+                    startTime = 0;
+                    timerLabel.setText("Tempo: 0.0s");
+                    updateMyProgress();
+                    opponentBars.clear();
+                    opponentsPanel.removeAll();
+                    opponentsPanel.revalidate();
+                    opponentsPanel.repaint();
+                    raceTrackPanel.clear();
+                    setButtons(true);
+                    resetButton.setVisible(false);
+                    log("A corrida foi resetada pelo servidor.");
                 }
                 default -> log("TCP recebido: " + message);
             }
@@ -277,6 +317,13 @@ public class RaceClientGUI extends JFrame {
         myProgress.setValue(myPosition);
         myProgress.setString(playerName() + " - " + myPosition + "%");
         raceTrackPanel.updatePosition(playerName(), myPosition, true);
+    }
+
+    private void updateTimerLabel() {
+        if (raceStarted) {
+            long duration = System.currentTimeMillis() - startTime;
+            timerLabel.setText(String.format("Tempo: %.1fs", duration / 1000.0));
+        }
     }
 
     private void updateOpponent(String name, int position) {
@@ -365,6 +412,12 @@ public class RaceClientGUI extends JFrame {
                 mainPlayerName = name;
             }
             positions.put(name, Math.max(0, Math.min(100, position)));
+            repaint();
+        }
+
+        void clear() {
+            positions.clear();
+            mainPlayerName = "";
             repaint();
         }
 

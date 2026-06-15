@@ -4,11 +4,11 @@ RaceNet é uma aplicação Java de corrida multiplayer simples para demonstrar o
 
 ## Ideia do jogo
 
-- Dois jogadores participam de uma corrida.
 - Cada jogador começa em `0%`.
-- Cada clique em `ACELERAR` aumenta a posição entre `1` e `6`.
+- Cada clique em `ACELERAR` (ou tecla `ESPAÇO`) aumenta a posição entre `1` e `6`.
 - A corrida termina quando algum jogador chega a `100%`.
 - Se apenas um jogador conectar, o servidor cria um `Bot`.
+- **Regra de Início**: A corrida só começa quando **TODOS** os jogadores conectados estiverem no estado "PRONTO".
 
 ## Uso de TCP e UDP
 
@@ -18,11 +18,12 @@ Porta padrão: `5000`
 
 O TCP é usado para mensagens importantes que não podem se perder:
 
-- `ENTRAR;Ana`
-- `PRONTO;Ana`
-- `INICIAR_CORRIDA`
-- `FINALIZAR;Ana;tempo=0`
-- `VENCEDOR;Ana`
+- `ENTRAR;Nome`: Registro do jogador.
+- `PRONTO;Nome`: Sinaliza que o jogador aguarda o início.
+- `INICIAR_CORRIDA`: Comando para disparar a largada.
+- `FINALIZAR;Nome;tempo=X`: Notifica a chegada com o tempo decorrido.
+- `VENCEDOR;Nome`: Confirmação oficial do pódio.
+- `RESET`: Comando para limpar o estado e permitir uma nova partida.
 
 Justificativa: o TCP garante a entrega confiável de eventos críticos do jogo, como entrada de jogadores, início da corrida e confirmação oficial do vencedor.
 
@@ -32,12 +33,69 @@ Porta padrão: `5001`
 
 O UDP é usado para mensagens rápidas e frequentes:
 
-- `POSICAO;Ana;47`
-- `RANKING;Ana=47;Bruno=42`
+- `POSICAO;Nome;47`: Atualização de progresso individual.
+- `RANKING;Nome1=47;Nome2=42`: Broadcast do estado global da pista.
 
-Justificativa: o UDP atualiza as posições durante a corrida. Como essas mensagens são frequentes e temporais, se uma atualização for perdida, outra posição será enviada logo depois.
+Justificativa: o UDP atualiza as posições durante a corrida. Como essas mensagens são frequentes e temporais, se uma atualização for perdida, outra posição será enviada logo depois, mantendo a fluidez visual sem sobrecarga.
 
-## Estrutura
+## Guia de Demonstração
+
+### Passo a passo para teste completo
+
+1. **Inicie o Servidor**: Execute `RaceServer`. Observe os logs iniciais de porta.
+2. **Conecte Jogadores**: Abra dois ou mais clientes. Informe os nomes (ex: `Alice` e `Bob`).
+3. **Sinalize Prontidão**: Clique em `Estou Pronto` em todos os clientes.
+4. **Largada**: Clique em `Iniciar Corrida`. Note que se alguém não estiver pronto, o servidor enviará um aviso de status e a corrida não iniciará.
+5. **Aceleração**: Use o botão ou a tecla `ESPAÇO`. O cronômetro em tempo real será ativado.
+6. **Finalização**: O primeiro a chegar a 100% envia o tempo final. O servidor anuncia o vencedor para todos.
+7. **Nova Corrida**: O botão `Nova Corrida` aparecerá nos clientes. Ao clicar, o servidor reseta o estado e todos podem jogar novamente.
+
+## Protocolo de Comunicação
+
+| Comando | Origem | Protocolo | Descrição |
+| :--- | :--- | :--- | :--- |
+| `ENTRAR;Nome` | Cliente | TCP | Solicita entrada no jogo. |
+| `PRONTO;Nome` | Cliente | TCP | Informa que o jogador está pronto para começar. |
+| `INICIAR_CORRIDA` | Cliente | TCP | Solicita o início da partida. |
+| `FINALIZAR;Nome;tempo=X` | Cliente | TCP | Notifica que o jogador completou 100% com o tempo X. |
+| `RESET` | Cliente | TCP | Solicita o reset global da corrida. |
+| `POSICAO;Nome;X` | Cliente | UDP | Envia a posição atual (0-100). |
+| `VENCEDOR;Nome` | Servidor | TCP | Anuncia o vencedor oficial. |
+| `RANKING;N1=X;N2=Y` | Servidor | UDP | Broadcast das posições de todos os jogadores. |
+| `STATUS;Mensagem` | Servidor | TCP | Envia logs informativos ou erros para a GUI. |
+
+## Logs Esperados do Servidor
+
+O servidor utiliza prefixos para facilitar a monitoria:
+
+```text
+[EVENTO] RaceNet Server iniciado.
+[LOG] TCP: 5000
+[LOG] UDP: 5001
+[EVENTO] Novo cliente conectado: /127.0.0.1:56789
+[LOG] TCP recebido de Alice: ENTRAR;Alice
+[EVENTO] Jogador Alice entrou.
+[LOG] Broadcast TCP: STATUS;Alice entrou no jogo.
+[LOG] TCP recebido de Alice: PRONTO;Alice
+[EVENTO] Jogador Alice está pronto.
+[LOG] Tentativa de início falhou: nem todos estão prontos.
+[EVENTO] Iniciando corrida com 2 jogadores.
+[LOG] Broadcast TCP: INICIAR_CORRIDA
+[EVENTO] Vencedor confirmado: Alice
+[EVENTO] Resetando corrida...
+```
+
+## Screenshots (Placeholders)
+
+### Interface do Cliente (GUI)
+*(Insira aqui o print do RaceClientGUI em funcionamento com o cronômetro e a pista)*
+
+### Terminal do Servidor
+*(Insira aqui o print do terminal com os logs padronizados [LOG] e [EVENTO])*
+
+---
+
+## Estrutura do Projeto
 
 ```text
 RaceNet/
@@ -66,75 +124,14 @@ Abra o terminal dentro da pasta `RaceNet` e execute:
 javac -d out src/shared/Protocol.java src/server/*.java src/client/*.java
 ```
 
-No PowerShell do Windows:
-
-```powershell
-javac -d out src\shared\Protocol.java src\server\*.java src\client\*.java
-```
-
 ## Como rodar
 
 ### 1. Iniciar o servidor
-
-No PC2, ou no mesmo computador para teste local:
-
 ```bash
 java -cp out server.RaceServer
 ```
 
-O servidor usa:
-
-- TCP `5000`
-- UDP `5001`
-
-### 2. Abrir um cliente
-
-Em outro terminal:
-
+### 2. Abrir o cliente
 ```bash
 java -cp out client.RaceClientGUI
 ```
-
-Na tela do cliente:
-
-1. Informe o nome do jogador.
-2. Informe o IP do servidor.
-   - Para teste no mesmo PC: `127.0.0.1`
-   - Para teste em outro PC: IP do PC2
-3. Use TCP `5000`.
-4. Use UDP `5001`.
-5. Clique em `Conectar`.
-6. Clique em `Estou Pronto`.
-7. Clique em `Iniciar Corrida`.
-8. Clique em `ACELERAR` até chegar a `100%`.
-
-## Como testar multiplayer
-
-### Teste local com dois clientes
-
-1. Compile o projeto.
-2. Rode o servidor.
-3. Abra dois terminais e execute o cliente duas vezes:
-
-```bash
-java -cp out client.RaceClientGUI
-java -cp out client.RaceClientGUI
-```
-
-4. Use nomes diferentes, por exemplo `Ana` e `Bruno`.
-5. Nos dois clientes, conecte ao servidor `127.0.0.1`.
-6. Inicie a corrida.
-
-### Teste com bot
-
-1. Rode o servidor.
-2. Abra apenas um cliente.
-3. Conecte, marque pronto e inicie a corrida.
-4. O servidor criará automaticamente o jogador `Bot`.
-
-## Configuração para roteadores
-
-Para a parte de rede física do trabalho, documente o redirecionamento das duas portas para o PC2:
-
-- Porta TCP `5000`: controle confiável da corrida.
-- Porta UDP `5001`: atualização em tempo real das posições.

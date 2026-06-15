@@ -16,9 +16,9 @@ public class RaceServer {
     public void start() {
         new Thread(udpServer, "UDP-Server").start();
         new Thread(tcpServer, "TCP-Server").start();
-        System.out.println("RaceNet Server iniciado.");
-        System.out.println("TCP: " + tcpServer.getPort());
-        System.out.println("UDP: " + udpServer.getPort());
+        System.out.println("[EVENTO] RaceNet Server iniciado.");
+        System.out.println("[LOG] TCP: " + tcpServer.getPort());
+        System.out.println("[LOG] UDP: " + udpServer.getPort());
     }
 
     public synchronized void startRace() {
@@ -26,6 +26,13 @@ public class RaceServer {
             return;
         }
 
+        if (!state.allPlayersReady()) {
+            System.out.println("[LOG] Tentativa de início falhou: nem todos estão prontos.");
+            tcpServer.broadcast(Protocol.STATUS + ";A corrida só inicia quando TODOS estiverem prontos.");
+            return;
+        }
+
+        System.out.println("[EVENTO] Iniciando corrida com " + state.playerCount() + " jogadores.");
         if (state.playerCount() == 1 && !state.hasPlayer("Bot")) {
             state.addPlayer("Bot");
             botRunner = new BotRunner(state, this);
@@ -38,8 +45,21 @@ public class RaceServer {
         udpServer.broadcastRanking();
     }
 
+    public synchronized void resetRace() {
+        System.out.println("[EVENTO] Resetando corrida...");
+        state.reset();
+        if (botRunner != null) {
+            botRunner.stop();
+            botRunner = null;
+        }
+        udpServer.clearClients();
+        tcpServer.broadcast(Protocol.RESET);
+        tcpServer.broadcast(Protocol.STATUS + ";Corrida resetada. Todos devem se conectar novamente.");
+    }
+
     public synchronized void confirmWinner(String name) {
         if (state.setWinner(name)) {
+            System.out.println("[EVENTO] Vencedor confirmado: " + name);
             if (botRunner != null) {
                 botRunner.stop();
             }

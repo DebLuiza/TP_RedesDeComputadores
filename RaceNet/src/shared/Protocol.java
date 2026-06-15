@@ -13,6 +13,7 @@ public final class Protocol {
     public static final String RANKING = "RANKING";
     public static final String STATUS = "STATUS";
     public static final String ENTER_OK = "ENTRAR_OK";
+    public static final String RESET = "RESET";
 
     private Protocol() {
     }
