@@ -50,6 +50,16 @@ Justificativa: o UDP atualiza as posições durante a corrida. Como essas mensag
 6. **Finalização**: O primeiro a chegar a 100% envia o tempo final. O servidor anuncia o vencedor para todos.
 7. **Nova Corrida**: O botão `Nova Corrida` aparecerá nos clientes. Ao clicar, o servidor reseta o estado e todos podem jogar novamente.
 
+## Entrega do Trabalho Prático
+
+Os arquivos de apoio para atender ao enunciado estão em `docs/`:
+
+- `docs/relatorio.md`: relatório base com objetivo, requisitos atendidos, topologia, execução e evidências.
+- `docs/configuracao-roteadores.md`: roteiro de endereçamento e port forwarding para R1, R2 e R3.
+- `docs/checklist-wireshark.md`: filtros e prints recomendados para comprovar TCP e UDP.
+
+Para a apresentação presencial, execute o servidor no PC2 e o cliente no PC1. No cliente, informe o IP externo acessível a partir do PC1 e as portas TCP/UDP exibidas no terminal do servidor.
+
 ## Protocolo de Comunicação
 
 | Comando | Origem | Protocolo | Descrição |

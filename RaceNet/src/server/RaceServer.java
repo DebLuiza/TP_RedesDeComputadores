@@ -2,6 +2,13 @@ package server;
 
 import shared.Protocol;
 
+import java.net.Inet4Address;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 public class RaceServer {
     private final RaceState state = new RaceState();
     private final TcpServer tcpServer;
@@ -19,6 +26,8 @@ public class RaceServer {
         System.out.println("[EVENTO] RaceNet Server iniciado.");
         System.out.println("[LOG] TCP: " + tcpServer.getPort());
         System.out.println("[LOG] UDP: " + udpServer.getPort());
+        System.out.println("[LOG] IPs locais para clientes: " + localIPv4Addresses());
+        System.out.println("[LOG] Informe no cliente o IP do servidor e as portas TCP/UDP acima.");
     }
 
     public synchronized void startRace() {
@@ -76,5 +85,24 @@ public class RaceServer {
         int tcpPort = args.length > 0 ? Integer.parseInt(args[0]) : Protocol.DEFAULT_TCP_PORT;
         int udpPort = args.length > 1 ? Integer.parseInt(args[1]) : Protocol.DEFAULT_UDP_PORT;
         new RaceServer(tcpPort, udpPort).start();
+    }
+
+    private List<String> localIPv4Addresses() {
+        List<String> addresses = new ArrayList<>();
+        try {
+            for (NetworkInterface networkInterface : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!networkInterface.isUp() || networkInterface.isLoopback()) {
+                    continue;
+                }
+                for (var address : Collections.list(networkInterface.getInetAddresses())) {
+                    if (address instanceof Inet4Address) {
+                        addresses.add(address.getHostAddress());
+                    }
+                }
+            }
+        } catch (SocketException exception) {
+            addresses.add("erro ao listar IPs: " + exception.getMessage());
+        }
+        return addresses.isEmpty() ? List.of("127.0.0.1") : addresses;
     }
 }
